@@ -1,0 +1,34 @@
+{
+  "name": "jsonapi-express",
+  "version": "0.0.1",
+  "description": "Automatic JSONAPI CRUD endpoints based on simple schemas",
+  "main": "index.js",
+  "scripts": {
+    "test": "tape test/*.js test/**/*.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jesseditson/jsonapi-express.git"
+  },
+  "keywords": [
+    "jsonapi",
+    "express",
+    "ember",
+    "middleware"
+  ],
+  "author": "Jesse Ditson <jesse.ditson@gmail.com>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jesseditson/jsonapi-express/issues"
+  },
+  "homepage": "https://github.com/jesseditson/jsonapi-express#readme",
+  "dependencies": {
+    "body-parser": "^1.15.1",
+    "express": "^4.13.4",
+    "pluralize": "^2.0.0"
+  },
+  "devDependencies": {
+    "supertest": "^1.2.0",
+    "tape": "^4.5.1"
+  }
+}
