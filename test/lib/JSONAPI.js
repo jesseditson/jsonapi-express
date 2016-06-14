@@ -67,7 +67,7 @@ test('adds relationships & data when defined in the schema and included', t => {
     test: 'foo'
   }, {
     included: {
-      stuffs: [ { title: 'bar', id: 2 } ]
+      stuffs: [ { title: 'bar', id: 2, thing_id: 0 } ]
     }
   })
   t.equal(typeof api.data.relationships, 'object', 'creates a data relationships key')
@@ -84,7 +84,8 @@ test('relationships can be single objects', t => {
   var f = JSONAPI(schemas, '/api')('bars')
   var api = f({
     id: 0,
-    test: 'foo'
+    test: 'foo',
+    foo_id: 2
   }, {
     included: {
       foos: { name: 'bar', id: 2 }

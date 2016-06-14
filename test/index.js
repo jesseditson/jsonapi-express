@@ -38,11 +38,11 @@ const schemas = {
   stuffs: {
     title: 'string',
     count: 'number',
-    thing: { type: 'things', relationship: 'belongsTo', key: 'thing_id' }
+    thing: { type: 'things', relationship: 'belongsTo' }
   },
   things: {
     name: 'string',
-    stuffs: { type: 'stuffs', relationship: 'hasMany', column: 'thing' }
+    stuffs: { type: 'stuffs', relationship: 'hasMany' }
   }
 }
 var operations = {
@@ -53,7 +53,7 @@ var operations = {
         case 'things':
           return resolve(data.allThings)
         case 'stuffs':
-          if (opts.params.things_id && attributes !== '*') return resolve(data.stuffIds)
+          if (opts.params.thing_id && attributes !== '*') return resolve(data.stuffIds)
           return resolve(data.allStuffs)
       }
     })
