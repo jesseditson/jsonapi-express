@@ -1,14 +1,22 @@
+var path = require('path')
 var express = require('express')
 var JSONAPI = require('./lib/JSONAPI')
+var loadSchemas = require('./lib/loadSchemas')
 var bodyParser = require('body-parser')
 var pluralize = require('pluralize')
+var debug = require('debug')('jsonapi-express:routes')
 
 const headers = {
   'Content-Type': 'application/vnd.api+json',
   'Accept': 'application/vnd.api+json'
 }
 
-module.exports = function(schemas, operations, baseURL) {
+module.exports = function(operations, baseURL, rootDir) {
+  rootDir = rootDir || path.join(process.cwd(), 'app', 'schemas')
+  debug(`Reading schemas from ${rootDir}`)
+  baseURL = baseURL || '/'
+  debug(`Adding JSONAPI routes at ${baseURL}`)
+  var schemas = loadSchemas(rootDir)
   var router = express.Router()
   router.use(bodyParser.json({ type: 'application/vnd.api+json' }))
   if (typeof operations.findAll !== 'function') throw new Error('operations.findAll must be a valid function.')
@@ -17,6 +25,7 @@ module.exports = function(schemas, operations, baseURL) {
   if (typeof operations.delete !== 'function') throw new Error('operations.delete must be a valid function.')
   if (typeof operations.updateRelationship !== 'function') throw new Error('operations.updateRelationship must be a valid function.')
   Object.keys(schemas).forEach(name => {
+    debug(`Adding routes for ${name}`)
     addRoutes(name, schemas, router, operations, baseURL)
   })
   return router
@@ -28,9 +37,17 @@ function success(res, code) {
   return res
 }
 
+function debugWith(prefix) {
+  return function(value) {
+    debug(prefix + String(value))
+    return value
+  }
+}
+
 function addRoutes(name, schemas, router, operations, baseURL) {
   var toJSONAPI = JSONAPI(schemas, baseURL)
-  router.get(`/${name}`, (req, res, next) => {
+  var d = debugWith(`Added route: ${baseURL}`)
+  router.get(d(`/${name}`), (req, res, next) => {
     operations.findAll(name, '*', { query: req.query, params: {} })
       .then(records => {
         success(res).json(toJSONAPI(name)(records.data, {
@@ -39,7 +56,7 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       })
       .catch(next)
   })
-  router.get(`/${name}/:id`, (req, res, next) => {
+  router.get(d(`/${name}/:id`), (req, res, next) => {
     operations.findOne(name, '*', { query: req.query, params: { id: parseInt(req.params.id, 10) } })
       .then(records => {
         success(res).json(toJSONAPI(name)(records.data, {
@@ -48,19 +65,19 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       })
       .catch(next)
   })
-  router.post(`/${name}`, (req, res, next) => {
+  router.post(d(`/${name}`), (req, res, next) => {
     operations.create(name, req.body)
-      .then(id => {
+      .then(records => {
         success(res, 201)
           .set('Location', `${baseURL}/${name}/${id}`)
           .json(toJSONAPI(name)(records.data))
       })
       .catch(next)
   })
-  router.delete(`/${name}/:id`, (req, res, next) => {
+  router.delete(d(`/${name}/:id`), (req, res, next) => {
     operations.delete(name, req.params.id)
       .then(records => {
-        success(res).json(toJSONAPI(name)(records.data))
+        success(res, 204).send()
       })
       .catch(next)
   })
@@ -95,7 +112,7 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       }
       return data
     }
-    router.get(`/${name}/:id/relationships/${k}`, (req, res, next) => {
+    router.get(d(`/${name}/:id/relationships/${k}`), (req, res, next) => {
       operations.findAll(relationship.type, ['id'], getOptions(req))
         .then(records => {
           success(res).json(toJSONAPI(relationship.type)(normalizeData(records.data), {
@@ -114,18 +131,20 @@ function addRoutes(name, schemas, router, operations, baseURL) {
         id: req.params.id,
         type: relationship.type
       }
-      operations.updateRelationship(relationship.relationship, record, {
-        data: req.body.data
-      })
+      operations.updateRelationship(relationship.relationship, record, req.body.data)
         .then(response => {
-          success(res).json(toJSONAPI(relationship.type)(normalizeData(response.data)))
+          if (response === null) {
+            success(res, 204).send()
+          } else {
+            success(res).json((normalizeData(response)))
+          }
         })
         .catch(next)
     }
-    router.patch(`/${name}/:id/relationships/${k}`, updateRelationship.bind(null, 'update'))
-    router.post(`/${name}/:id/relationships/${k}`, updateRelationship.bind(null, 'create'))
-    router.delete(`/${name}/:id/relationships/${k}`, updateRelationship.bind(null, 'delete'))
-    router.get(`/${name}/:id/${k}`, (req, res, next) => {
+    router.post(d(`/${name}/:id/relationships/${k}`), updateRelationship.bind(null, 'create'))
+    router.patch(d(`/${name}/:id/relationships/${k}`), updateRelationship.bind(null, 'update'))
+    router.delete(d(`/${name}/:id/relationships/${k}`), updateRelationship.bind(null, 'delete'))
+    router.get(d(`/${name}/:id/${k}`), (req, res, next) => {
       operations.findAll(relationship.type, '*', getOptions(req))
         .then(records => {
           success(res).json(toJSONAPI(relationship.type)(normalizeData(records.data), {
