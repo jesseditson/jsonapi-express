@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "description": "Automatic JSONAPI CRUD endpoints based on simple schemas",
   "main": "index.js",
+  "ember-addon-main": "addon.js",
   "scripts": {
     "test": "tape test/*.js test/**/*.js"
   },
@@ -14,7 +15,8 @@
     "jsonapi",
     "express",
     "ember",
-    "middleware"
+    "middleware",
+    "ember-addon"
   ],
   "author": "Jesse Ditson <jesse.ditson@gmail.com>",
   "license": "ISC",
