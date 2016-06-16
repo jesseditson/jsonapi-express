@@ -42,7 +42,7 @@ module.exports.findOne = function(type, fields, filter) {
 }
 
 /**
- * create - create a record and return the ID
+ * create - create and return a new record
  * Note that this method is also expected to create relationships if specified, as per the JSONAPI spec.
  * The returned data is expected to be a
  *

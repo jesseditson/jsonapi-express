@@ -44,11 +44,18 @@ function debugWith(prefix) {
   }
 }
 
+function normalizeRecords(records) {
+  if (!records) return records
+  if (!records.data) return { data: records }
+  return records
+}
+
 function addRoutes(name, schemas, router, operations, baseURL) {
   var toJSONAPI = JSONAPI(schemas, baseURL)
   var d = debugWith(`Added route: ${baseURL}`)
   router.get(d(`/${name}`), (req, res, next) => {
     operations.findAll(name, '*', { query: req.query, params: {} })
+      .then(normalizeRecords)
       .then(records => {
         success(res).json(toJSONAPI(name)(records.data, {
           included: records.included
@@ -58,6 +65,7 @@ function addRoutes(name, schemas, router, operations, baseURL) {
   })
   router.get(d(`/${name}/:id`), (req, res, next) => {
     operations.findOne(name, '*', { query: req.query, params: { id: parseInt(req.params.id, 10) } })
+      .then(normalizeRecords)
       .then(records => {
         success(res).json(toJSONAPI(name)(records.data, {
           included: records.included
@@ -67,6 +75,7 @@ function addRoutes(name, schemas, router, operations, baseURL) {
   })
   router.post(d(`/${name}`), (req, res, next) => {
     operations.create(name, req.body)
+      .then(normalizeRecords)
       .then(records => {
         success(res, 201)
           .set('Location', `${baseURL}/${name}/${id}`)
@@ -114,6 +123,7 @@ function addRoutes(name, schemas, router, operations, baseURL) {
     }
     router.get(d(`/${name}/:id/relationships/${k}`), (req, res, next) => {
       operations.findAll(relationship.type, ['id'], getOptions(req))
+        .then(normalizeRecords)
         .then(records => {
           success(res).json(toJSONAPI(relationship.type)(normalizeData(records.data), {
             links: {
@@ -146,6 +156,7 @@ function addRoutes(name, schemas, router, operations, baseURL) {
     router.delete(d(`/${name}/:id/relationships/${k}`), updateRelationship.bind(null, 'delete'))
     router.get(d(`/${name}/:id/${k}`), (req, res, next) => {
       operations.findAll(relationship.type, '*', getOptions(req))
+        .then(normalizeRecords)
         .then(records => {
           success(res).json(toJSONAPI(relationship.type)(normalizeData(records.data), {
             links: {
