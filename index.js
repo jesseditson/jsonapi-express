@@ -97,14 +97,24 @@ function addRoutes(name, schemas, router, operations, baseURL) {
     var type = relationship.type
     function getOptions(req) {
       var id = parseInt(req.params.id, 10)
-      var params = {}
-      if (relationship.foreignKey) {
-        params[relationship.foreignKey] = id
-      } else {
-        var idField = relationship.relationship === 'belongsTo' ? 'id' : `${pluralize(name, 1)}_id`
-        params[idField] = id
+      var opts = {
+        params: {},
+        query: req.query
       }
-      var opts = { query: req.query, params: params }
+      if (relationship.relationship === 'belongsTo') {
+        // TODO: verify that this works in both directions
+        var idKey = relationship.foreignKey || `${k}_id`
+        opts.join = {
+          fields: `${type}.*`,
+          table: `${name}`,
+          left: `${name}.${idKey}`,
+          right: `${type}.id`
+        }
+        opts.params[`${name}.id`] = id
+      } else if (relationship.relationship === 'hasMany') {
+        idKey = relationship.foreignKey || `${pluralize(name, 1)}_id`
+        opts.params[idKey] = id
+      }
       if (relationship.through) {
         opts.through = relationship.through
       }
