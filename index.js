@@ -24,6 +24,7 @@ module.exports = function(operations, baseURL, rootDir) {
   if (typeof operations.create !== 'function') throw new Error('operations.create must be a valid function.')
   if (typeof operations.delete !== 'function') throw new Error('operations.delete must be a valid function.')
   if (typeof operations.updateRelationship !== 'function') throw new Error('operations.updateRelationship must be a valid function.')
+  router.use(operations.authorize)
   Object.keys(schemas).forEach(name => {
     debug(`Adding routes for ${name}`)
     addRoutes(name, schemas, router, operations, baseURL)
@@ -50,12 +51,25 @@ function normalizeRecords(records) {
   return records
 }
 
+function getSideEffects(sideEffects) {
+  sideEffects = sideEffects || {}
+  return function(type, operation) {
+    var effect = sideEffects[type] && sideEffects[type][operation]
+    return function(memo) {
+      if (effect) return effect(memo)
+      return memo
+    }
+  }
+}
+
 function addRoutes(name, schemas, router, operations, baseURL) {
+  var sideEffect = getSideEffects(operations.sideEffects)
   var toJSONAPI = JSONAPI(schemas, baseURL)
   var d = debugWith(`Added route: ${baseURL}`)
   router.get(d(`/${name}`), (req, res, next) => {
     operations.findAll(name, '*', { query: req.query, params: {} })
       .then(normalizeRecords)
+      .then(sideEffect(name, 'findAll'))
       .then(records => {
         success(res).json(toJSONAPI(name)(records.data, {
           included: records.included
@@ -66,6 +80,7 @@ function addRoutes(name, schemas, router, operations, baseURL) {
   router.get(d(`/${name}/:id`), (req, res, next) => {
     operations.findOne(name, '*', { query: req.query, params: { id: parseInt(req.params.id, 10) } })
       .then(normalizeRecords)
+      .then(sideEffect(name, 'findOne'))
       .then(records => {
         success(res).json(toJSONAPI(name)(records.data, {
           included: records.included
@@ -75,16 +90,36 @@ function addRoutes(name, schemas, router, operations, baseURL) {
   })
   router.post(d(`/${name}`), (req, res, next) => {
     operations.create(name, req.body)
+      .returning('id')
+      .then(ids => {
+        return operations.findOne(name, '*', { query: req.query, params: { id: ids[0] } })
+      })
       .then(normalizeRecords)
+      .then(sideEffect(name, 'create'))
       .then(records => {
+        console.log(records)
         success(res, 201)
-          .set('Location', `${baseURL}/${name}/${id}`)
-          .json(toJSONAPI(name)(records.data))
+          .set('Location', `${baseURL}/${name}/${records.id}`)
+          .json(toJSONAPI(name)(records.data, {
+            included: records.included
+          }))
+      })
+      .catch(next)
+  })
+  router.patch(d(`/${name}/:id`), (req, res, next) => {
+    operations.update(name, req.params.id, req.body)
+      .then(normalizeRecords)
+      .then(sideEffect(name, 'update'))
+      .then(records => {
+        success(res).json(toJSONAPI(name)(records.data, {
+          included: records.included
+        }))
       })
       .catch(next)
   })
   router.delete(d(`/${name}/:id`), (req, res, next) => {
     operations.delete(name, req.params.id)
+      .then(sideEffect(name, 'delete'))
       .then(records => {
         success(res, 204).send()
       })
