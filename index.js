@@ -97,7 +97,6 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       .then(normalizeRecords)
       .then(sideEffect(name, 'create'))
       .then(records => {
-        console.log(records)
         success(res, 201)
           .set('Location', `${baseURL}/${name}/${records.id}`)
           .json(toJSONAPI(name)(records.data, {
