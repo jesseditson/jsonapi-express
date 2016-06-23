@@ -82,6 +82,7 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       .then(normalizeRecords)
       .then(sideEffect(name, 'findOne'))
       .then(records => {
+        records = records || {}
         success(res).json(toJSONAPI(name)(records.data, {
           included: records.included
         }))
@@ -97,6 +98,7 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       .then(normalizeRecords)
       .then(sideEffect(name, 'create'))
       .then(records => {
+        records = records || {}
         success(res, 201)
           .set('Location', `${baseURL}/${name}/${records.id}`)
           .json(toJSONAPI(name)(records.data, {
@@ -110,6 +112,7 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       .then(normalizeRecords)
       .then(sideEffect(name, 'update'))
       .then(records => {
+        records = records || {}
         success(res).json(toJSONAPI(name)(records.data, {
           included: records.included
         }))
@@ -169,6 +172,7 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       operations.findAll(relationship.type, ['id'], getOptions(req))
         .then(normalizeRecords)
         .then(records => {
+          records = records || {}
           success(res).json(toJSONAPI(relationship.type)(normalizeData(records.data), {
             links: {
               self: `/${name}/${req.params.id}/relationships/${k}`,
@@ -202,6 +206,7 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       operations.findAll(relationship.type, '*', getOptions(req))
         .then(normalizeRecords)
         .then(records => {
+          records = records || {}
           success(res).json(toJSONAPI(relationship.type)(normalizeData(records.data), {
             links: {
               self: `/${name}/${req.params.id}/${k}`
