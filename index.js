@@ -53,10 +53,10 @@ function normalizeRecords(records) {
 
 function getSideEffects(sideEffects) {
   sideEffects = sideEffects || {}
-  return function(type, operation) {
-    var effect = sideEffects[type] && sideEffects[type][operation]
+  return function(type, operation, hook, arguments) {
+    var effect = sideEffects[type] && sideEffects[type][operation] && sideEffects[type][operation][hook]
     return function(memo) {
-      if (effect) return effect(memo)
+      if (effect) return effect(memo, ...arguments)
       return memo
     }
   }
@@ -68,8 +68,9 @@ function addRoutes(name, schemas, router, operations, baseURL) {
   var d = debugWith(`Added route: ${baseURL}`)
   router.get(d(`/${name}`), (req, res, next) => {
     operations.findAll(name, '*', { query: req.query, params: {} })
+      .then(sideEffect(name, 'findAll', 'query'))
       .then(normalizeRecords)
-      .then(sideEffect(name, 'findAll'))
+      .then(sideEffect(name, 'findAll', 'records'))
       .then(records => {
         success(res).json(toJSONAPI(name)(records.data, {
           included: records.included
@@ -79,8 +80,9 @@ function addRoutes(name, schemas, router, operations, baseURL) {
   })
   router.get(d(`/${name}/:id`), (req, res, next) => {
     operations.findOne(name, '*', { query: req.query, params: { id: parseInt(req.params.id, 10) } })
+      .then(sideEffect(name, 'findOne', 'query'))
       .then(normalizeRecords)
-      .then(sideEffect(name, 'findOne'))
+      .then(sideEffect(name, 'findOne', 'records'))
       .then(records => {
         records = records || {}
         success(res).json(toJSONAPI(name)(records.data, {
@@ -91,12 +93,13 @@ function addRoutes(name, schemas, router, operations, baseURL) {
   })
   router.post(d(`/${name}`), (req, res, next) => {
     operations.create(name, req.body)
+      .then(sideEffect(name, 'create', 'query'))
       .returning('id')
       .then(ids => {
         return operations.findOne(name, '*', { query: req.query, params: { id: ids[0] } })
       })
       .then(normalizeRecords)
-      .then(sideEffect(name, 'create'))
+      .then(sideEffect(name, 'create', 'records'))
       .then(records => {
         records = records || {}
         success(res, 201)
@@ -109,8 +112,9 @@ function addRoutes(name, schemas, router, operations, baseURL) {
   })
   router.patch(d(`/${name}/:id`), (req, res, next) => {
     operations.update(name, req.params.id, req.body)
+      .then(sideEffect(name, 'update', 'query'))
       .then(normalizeRecords)
-      .then(sideEffect(name, 'update'))
+      .then(sideEffect(name, 'update', 'records'))
       .then(records => {
         records = records || {}
         success(res).json(toJSONAPI(name)(records.data, {
@@ -121,7 +125,8 @@ function addRoutes(name, schemas, router, operations, baseURL) {
   })
   router.delete(d(`/${name}/:id`), (req, res, next) => {
     operations.delete(name, req.params.id)
-      .then(sideEffect(name, 'delete'))
+      .then(sideEffect(name, 'delete', 'query'))
+      .then(sideEffect(name, 'delete', 'records'))
       .then(records => {
         success(res, 204).send()
       })
@@ -170,7 +175,9 @@ function addRoutes(name, schemas, router, operations, baseURL) {
     }
     router.get(d(`/${name}/:id/relationships/${k}`), (req, res, next) => {
       operations.findAll(relationship.type, ['id'], getOptions(req))
+        // .then(sideEffect(name, 'findRelationships', 'query', [k]))
         .then(normalizeRecords)
+        // .then(sideEffect(name, 'findRelationships', 'records', [k]))
         .then(records => {
           records = records || {}
           success(res).json(toJSONAPI(relationship.type)(normalizeData(records.data), {
@@ -204,7 +211,9 @@ function addRoutes(name, schemas, router, operations, baseURL) {
     router.delete(d(`/${name}/:id/relationships/${k}`), updateRelationship.bind(null, 'delete'))
     router.get(d(`/${name}/:id/${k}`), (req, res, next) => {
       operations.findAll(relationship.type, '*', getOptions(req))
+        // .then(sideEffect(name, 'findRelationship', 'query', [k]))
         .then(normalizeRecords)
+        // .then(sideEffect(name, 'findRelationship', 'records', [k]))
         .then(records => {
           records = records || {}
           success(res).json(toJSONAPI(relationship.type)(normalizeData(records.data), {
