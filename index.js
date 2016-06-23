@@ -68,7 +68,6 @@ function addRoutes(name, schemas, router, operations, baseURL) {
   var d = debugWith(`Added route: ${baseURL}`)
   router.get(d(`/${name}`), (req, res, next) => {
     operations.findAll(name, '*', { query: req.query, params: {} })
-      .then(sideEffect(name, 'findAll', 'query'))
       .then(normalizeRecords)
       .then(sideEffect(name, 'findAll', 'records'))
       .then(records => {
@@ -80,7 +79,6 @@ function addRoutes(name, schemas, router, operations, baseURL) {
   })
   router.get(d(`/${name}/:id`), (req, res, next) => {
     operations.findOne(name, '*', { query: req.query, params: { id: parseInt(req.params.id, 10) } })
-      .then(sideEffect(name, 'findOne', 'query'))
       .then(normalizeRecords)
       .then(sideEffect(name, 'findOne', 'records'))
       .then(records => {
@@ -93,7 +91,6 @@ function addRoutes(name, schemas, router, operations, baseURL) {
   })
   router.post(d(`/${name}`), (req, res, next) => {
     operations.create(name, req.body)
-      .then(sideEffect(name, 'create', 'query'))
       .returning('id')
       .then(ids => {
         return operations.findOne(name, '*', { query: req.query, params: { id: ids[0] } })
@@ -112,7 +109,6 @@ function addRoutes(name, schemas, router, operations, baseURL) {
   })
   router.patch(d(`/${name}/:id`), (req, res, next) => {
     operations.update(name, req.params.id, req.body)
-      .then(sideEffect(name, 'update', 'query'))
       .then(normalizeRecords)
       .then(sideEffect(name, 'update', 'records'))
       .then(records => {
@@ -125,7 +121,6 @@ function addRoutes(name, schemas, router, operations, baseURL) {
   })
   router.delete(d(`/${name}/:id`), (req, res, next) => {
     operations.delete(name, req.params.id)
-      .then(sideEffect(name, 'delete', 'query'))
       .then(sideEffect(name, 'delete', 'records'))
       .then(records => {
         success(res, 204).send()
