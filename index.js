@@ -1,6 +1,6 @@
 var path = require('path')
 var express = require('express')
-var JSONAPI = require('./lib/JSONAPI')
+var JSONAPI = require('jsonapi-schema')
 var loadSchemas = require('./lib/loadSchemas')
 var bodyParser = require('body-parser')
 var pluralize = require('pluralize')
@@ -11,6 +11,20 @@ const headers = {
   'Accept': 'application/vnd.api+json'
 }
 
+function unsupported(operation) {
+  return function() {
+    throw new Error(`Cannot ${operation} records, no ${operation} method provided.`)
+  }
+}
+
+const requiredOperations = [
+  'findAll',
+  'findOne',
+  'create',
+  'delete',
+  'updateRelationship'
+]
+
 module.exports = function(operations, baseURL, rootDir) {
   rootDir = rootDir || path.join(process.cwd(), 'app', 'schemas')
   debug(`Reading schemas from ${rootDir}`)
@@ -19,12 +33,10 @@ module.exports = function(operations, baseURL, rootDir) {
   var schemas = loadSchemas(rootDir)
   var router = express.Router()
   router.use(bodyParser.json({ type: 'application/vnd.api+json' }))
-  if (typeof operations.findAll !== 'function') throw new Error('operations.findAll must be a valid function.')
-  if (typeof operations.findOne !== 'function') throw new Error('operations.findOne must be a valid function.')
-  if (typeof operations.create !== 'function') throw new Error('operations.create must be a valid function.')
-  if (typeof operations.delete !== 'function') throw new Error('operations.delete must be a valid function.')
-  if (typeof operations.updateRelationship !== 'function') throw new Error('operations.updateRelationship must be a valid function.')
-  router.use(operations.authorize)
+  requiredOperations.forEach(op => {
+    if (typeof operations[op] !== 'function') operations[op] = unsupported(op)
+  })
+  if (operations.authorize) router.use(operations.authorize)
   Object.keys(schemas).forEach(name => {
     debug(`Adding routes for ${name}`)
     addRoutes(name, schemas, router, operations, baseURL)
@@ -168,11 +180,28 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       }
       return data
     }
+    router.get(d(`/${name}/:id/${k}`), (req, res, next) => {
+      var operation = relationship.relationship === 'belongsTo' ? 'findOne' : 'findAll'
+      operations[operation](relationship.type, '*', getOptions(req))
+        .then(sideEffect(name, 'findRelationship', 'query', [k]))
+        .then(normalizeRecords)
+        .then(sideEffect(name, 'findRelationship', 'records', [k]))
+        .then(records => {
+          records = records || {}
+          success(res).json(toJSONAPI(relationship.type)(normalizeData(records.data), {
+            links: {
+              self: `/${name}/${req.params.id}/${k}`
+            },
+            included: records.included
+          }))
+        })
+        .catch(next)
+    })
     router.get(d(`/${name}/:id/relationships/${k}`), (req, res, next) => {
       operations.findAll(relationship.type, ['id'], getOptions(req))
-        // .then(sideEffect(name, 'findRelationships', 'query', [k]))
+        .then(sideEffect(name, 'findRelationships', 'query', [k]))
         .then(normalizeRecords)
-        // .then(sideEffect(name, 'findRelationships', 'records', [k]))
+        .then(sideEffect(name, 'findRelationships', 'records', [k]))
         .then(records => {
           records = records || {}
           success(res).json(toJSONAPI(relationship.type)(normalizeData(records.data), {
@@ -204,21 +233,5 @@ function addRoutes(name, schemas, router, operations, baseURL) {
     router.post(d(`/${name}/:id/relationships/${k}`), updateRelationship.bind(null, 'create'))
     router.patch(d(`/${name}/:id/relationships/${k}`), updateRelationship.bind(null, 'update'))
     router.delete(d(`/${name}/:id/relationships/${k}`), updateRelationship.bind(null, 'delete'))
-    router.get(d(`/${name}/:id/${k}`), (req, res, next) => {
-      operations.findAll(relationship.type, '*', getOptions(req))
-        // .then(sideEffect(name, 'findRelationship', 'query', [k]))
-        .then(normalizeRecords)
-        // .then(sideEffect(name, 'findRelationship', 'records', [k]))
-        .then(records => {
-          records = records || {}
-          success(res).json(toJSONAPI(relationship.type)(normalizeData(records.data), {
-            links: {
-              self: `/${name}/${req.params.id}/${k}`
-            },
-            included: records.included
-          }))
-        })
-        .catch(next)
-    })
   })
 }

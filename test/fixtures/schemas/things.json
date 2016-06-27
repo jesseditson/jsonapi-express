@@ -1,0 +1,7 @@
+{
+  "name": "string",
+  "stuffs": {
+    "type": "stuffs",
+    "relationship": "hasMany"
+  }
+}

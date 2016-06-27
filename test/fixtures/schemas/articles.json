@@ -1,0 +1,16 @@
+{
+  "title": "string",
+  "authors": {
+    "type": "users",
+    "relationship": "hasMany",
+    "through": "users_articles"
+  },
+  "creator": {
+    "type": "users",
+    "relationship": "belongsTo"
+  },
+  "comments": {
+    "type": "comments",
+    "relationship": "hasMany"
+  }
+}

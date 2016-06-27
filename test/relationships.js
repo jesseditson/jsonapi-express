@@ -1,82 +1,54 @@
 var request = require('supertest')
 var test = require('tape')
 var router = require('..')
-var serve = require('./server')
+var serve = require('./fixtures/server')
+var data = require('./fixtures/data')
+var path = require('path')
 
-const data = {
-  articles: [
-    { id: 1, title: 'JSON API paints my bikeshed!', creator_id: 1 }
-  ],
-  users_articles: [
-    { user_id: 1, article_id: 1 },
-    { user_id: 2, article_id: 1 }
-  ],
-  users: [
-    { id: 1, name: 'Yehuda Katz' },
-    { id: 2, name: 'DHH' },
-    { id: 3, name: 'Jesse Ditson' }
-  ],
-  comments: [
-    { id: 1, content: 'first', article_id: 1, user_id: 3 }
-  ]
-}
+const schemasDir = path.join(__dirname, 'fixtures', 'schemas')
 
-const schemas = {
-  articles: {
-    title: 'string',
-    authors: { type: 'users', relationship: 'hasMany', through: 'users_articles' },
-    creator: { type: 'users', relationship: 'belongsTo' },
-    comments: { type: 'comments', relationship: 'hasMany' }
-  },
-  users_articles: {
-    author: { type: 'users' },
-    article: { type: 'articles' }
-  },
-  users: {
-    name: 'string',
-    articles: { type: 'articles', relationship: 'hasMany', through: 'users_articles' },
-  },
-  comments: {
-    article: { type: 'articles', relationship: 'belongsTo' },
-    user: { type: 'users', relationship: 'belongsTo' },
-    content: 'string'
-  }
+function query(name, attributes, opts) {
+  console.log('find', name, attributes, opts)
+  return new Promise((resolve, reject) => {
+    if (name === 'articles') {
+      resolve({ data: data.articles })
+    } else if (name === 'users') {
+      var users = data.users
+      if (opts.params.article_id) {
+        var joinData = data.users_articles.reduce((o, j) => {
+          if (j.article_id == opts.params.article_id) o[j.user_id] = j.article_id
+          return o
+        }, {})
+        if (attributes === '*') {
+          users = users.filter(u => !!joinData[u.id])
+        } else if (attributes && attributes[0] === 'id' && attributes.length === 1) {
+          users = Object.keys(joinData).map(i => {
+            return { id: i }
+          })
+        }
+      } else if (opts.params.id) {
+        users = users.filter(u => u.id === opts.params.id)
+      }
+      resolve({ data: users })
+    } else if (name === 'comments') {
+      resolve({ data: data.comments })
+    } else {
+      reject(new Error('Not found'))
+    }
+  })
 }
 
 test('Without sideloading', t => {
   var server = serve(app => {
-    app.use('/api', router(schemas, {
-      findAll(name, attributes, opts) {
-        console.log('find', name, attributes, opts)
-        return new Promise((resolve, reject) => {
-          if (name === 'articles') {
-            resolve({ data: data.articles })
-          } else if (name === 'users') {
-            var users = data.users
-            if (opts.params.article_id) {
-              var joinData = data.users_articles.reduce((o, j) => {
-                if (j.article_id == opts.params.article_id) o[j.user_id] = j.article_id
-                return o
-              }, {})
-              if (attributes === '*') {
-                users = users.filter(u => !!joinData[u.id])
-              } else if (attributes && attributes[0] === 'id' && attributes.length === 1) {
-                users = Object.keys(joinData).map(i => {
-                  return { id: i }
-                })
-              }
-            } else if (opts.params.id) {
-              users = users.filter(u => u.id === opts.params.id)
-            }
-            resolve({ data: users })
-          } else if (name === 'comments') {
-            resolve({ data: data.comments })
-          } else {
-            reject(new Error('Not found'))
-          }
+    app.use('/api', router({
+      findAll: query,
+      findOne: function(name, attributes, options) {
+        return query(name, attributes, options).then(obj => {
+          obj.data = obj.data[0]
+          return obj
         })
       }
-    }, '/api'))
+    }, '/api', schemasDir))
   })
   t.test('GET /api/articles', t => {
     request(server)
@@ -148,7 +120,7 @@ test('Without sideloading', t => {
 
 test('With sideloading', t => {
   var server = serve(app => {
-    app.use('/api', router(schemas, {
+    app.use('/api', router({
       findOne(name, attributes, opts) {
         return this.findAll(name, attributes, opts).then(u => {
           u.data = u.data[0]
@@ -189,7 +161,7 @@ test('With sideloading', t => {
           }
         })
       }
-    }, '/api'))
+    }, '/api', schemasDir))
   })
   t.test('GET /api/articles', t => {
     request(server)

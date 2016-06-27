@@ -1,0 +1,8 @@
+{
+  "name": "string",
+  "articles": {
+    "type": "articles",
+    "relationship": "hasMany",
+    "through": "users_articles"
+  }
+}

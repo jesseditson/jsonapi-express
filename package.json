@@ -5,7 +5,7 @@
   "main": "index.js",
   "ember-addon-main": "addon.js",
   "scripts": {
-    "test": "tape test/*.js test/**/*.js"
+    "test": "tape test/*.js"
   },
   "repository": {
     "type": "git",
@@ -27,7 +27,7 @@
   "dependencies": {
     "body-parser": "^1.15.1",
     "express": "^4.13.4",
-    "pluralize": "^2.0.0"
+    "jsonapi-schema": "0.0.1"
   },
   "devDependencies": {
     "supertest": "^1.2.0",

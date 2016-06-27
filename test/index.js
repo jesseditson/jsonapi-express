@@ -1,50 +1,12 @@
 var request = require('supertest')
 var test = require('tape')
 var router = require('..')
-var serve = require('./server')
+var serve = require('./fixtures/server')
+var path = require('path')
+var data = require('./fixtures/data')
 
-const data = {
-  allThings: {
-    data: [
-      { id: 1, name: 'foo' },
-      { id: 2, name: 'biz' }
-    ],
-    included: {
-      stuffs: [
-        {id: 1, title: 'foo', thing_id: 1},
-        {id: 2, title: 'bar', thing_id: 1},
-        {id: 3, title: 'baz', thing_id: 2}
-      ]
-    }
-  },
-  stuffIds: {
-    data: [
-      { id : 1 },
-      { id : 2 },
-      { id : 3 }
-    ],
-    defaults: {
-      thing_id: 1
-    }
-  },
-  allStuffs: {
-    data: [
-      { id: 1, title: 'foo', thing_id: null }
-    ]
-  }
-}
+const schemasDir = path.join(__dirname, 'fixtures', 'schemas')
 
-const schemas = {
-  stuffs: {
-    title: 'string',
-    count: 'number',
-    thing: { type: 'things', relationship: 'belongsTo' }
-  },
-  things: {
-    name: 'string',
-    stuffs: { type: 'stuffs', relationship: 'hasMany' }
-  }
-}
 var operations = {
   findAll(name, attributes, opts) {
     console.log('find', name, attributes, opts)
@@ -61,7 +23,7 @@ var operations = {
 }
 function createServer() {
   return serve(app => {
-    app.use('/api', router(schemas, operations, '/api'))
+    app.use('/api', router(operations, '/api', schemasDir))
   })
 }
 test('GET /api/things', t => {

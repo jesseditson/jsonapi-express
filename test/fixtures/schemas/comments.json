@@ -1,0 +1,11 @@
+{
+  "article": {
+    "type": "articles",
+    "relationship": "belongsTo"
+  },
+  "user": {
+    "type": "users",
+    "relationship": "belongsTo"
+  },
+  "content": "string"
+}
