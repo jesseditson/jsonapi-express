@@ -14,9 +14,7 @@
   "keywords": [
     "jsonapi",
     "express",
-    "ember",
-    "middleware",
-    "ember-addon"
+    "middleware"
   ],
   "author": "Jesse Ditson <jesse.ditson@gmail.com>",
   "license": "ISC",

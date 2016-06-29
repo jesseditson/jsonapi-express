@@ -1,7 +1,6 @@
 var path = require('path')
 var express = require('express')
 var JSONAPI = require('jsonapi-schema')
-var loadSchemas = require('./lib/loadSchemas')
 var bodyParser = require('body-parser')
 var pluralize = require('pluralize')
 var debug = require('debug')('jsonapi-express:routes')
@@ -25,12 +24,9 @@ const requiredOperations = [
   'updateRelationship'
 ]
 
-module.exports = function(operations, baseURL, rootDir) {
-  rootDir = rootDir || path.join(process.cwd(), 'app', 'schemas')
-  debug(`Reading schemas from ${rootDir}`)
+module.exports = function(operations, schemas, baseURL) {
   baseURL = baseURL || '/'
   debug(`Adding JSONAPI routes at ${baseURL}`)
-  var schemas = loadSchemas(rootDir)
   var router = express.Router()
   router.use(bodyParser.json({ type: 'application/vnd.api+json' }))
   requiredOperations.forEach(op => {
