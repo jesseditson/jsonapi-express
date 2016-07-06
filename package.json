@@ -25,7 +25,8 @@
   "dependencies": {
     "body-parser": "^1.15.1",
     "express": "^4.13.4",
-    "jsonapi-schema": "0.0.1"
+    "jsonapi-schema": "^0.1.1",
+    "pluralize": "^3.0.0"
   },
   "devDependencies": {
     "supertest": "^1.2.0",
