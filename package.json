@@ -1,6 +1,6 @@
 {
   "name": "jsonapi-express",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Automatic JSONAPI CRUD endpoints based on simple schemas",
   "main": "index.js",
   "ember-addon-main": "addon.js",
