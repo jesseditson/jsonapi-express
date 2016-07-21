@@ -1,4 +1,4 @@
-var db = require('./db')
+/** @module jsonapi-express/operations */
 
 /**
  * Operations

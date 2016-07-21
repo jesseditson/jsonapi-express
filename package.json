@@ -31,5 +31,8 @@
   "devDependencies": {
     "supertest": "^1.2.0",
     "tape": "^4.5.1"
+  },
+  "engines": {
+    "node": ">= 5.0.0"
   }
 }
