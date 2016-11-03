@@ -4,34 +4,18 @@ var JSONAPI = require('jsonapi-schema')
 var bodyParser = require('body-parser')
 var pluralize = require('pluralize')
 var debug = require('debug')('jsonapi-express:routes')
+var debugOp = require('debug')('jsonapi-express:operations');
 
 const headers = {
   'Content-Type': 'application/vnd.api+json',
   'Accept': 'application/vnd.api+json'
 }
 
-function unsupported(operation) {
-  return function() {
-    throw new Error(`Cannot ${operation} records, no ${operation} method provided.`)
-  }
-}
-
-const requiredOperations = [
-  'findAll',
-  'findOne',
-  'create',
-  'delete',
-  'updateRelationship'
-]
-
 module.exports = function(operations, schemas, baseURL) {
   baseURL = baseURL || '/'
   debug(`Adding JSONAPI routes at ${baseURL}`)
   var router = express.Router()
   router.use(bodyParser.json({ type: 'application/vnd.api+json' }))
-  requiredOperations.forEach(op => {
-    if (typeof operations[op] !== 'function') operations[op] = unsupported(op)
-  })
   if (operations.authorize) router.use(operations.authorize)
   Object.keys(schemas).forEach(name => {
     debug(`Adding routes for ${name}`)
@@ -70,11 +54,35 @@ function getTransform(transforms) {
   }
 }
 
+function getOperations(ops, name) {
+  return function operations(op, type) {
+    // look up this operation on the operation[model] hash (if it exists)
+    var operation = ops[name] && ops[name][op]
+    if (operation) debugOp('using ' + name + '.' + op + ' operation')
+    // fall back to a global handler for this type of operation (if available, useful for ORM-like implementations)
+    if (!operation && ops[op]) {
+      var t = type || name
+      operation = ops[op].bind(null, t)
+      debugOp('using base ' + op + ' operation with type ' + t)
+    }
+    // if no operation is provided, call next whenever this operation is called (which will give the opportunity to handle back to the containing express app)
+    if (!operation) {
+      operation = function() {
+        var opts = Array.prototype.slice.call(arguments).slice(-1)[0]
+        opts.next()
+      }
+      debugOp(op + ' ' + name + ' operation not found, skipping')
+    }
+    return operation
+  }
+}
+
 function addRoutes(name, schemas, router, operations, baseURL) {
   var transform = getTransform(operations.transforms)
+  var operation = getOperations(operations, name)
   function transformIncluded(req) {
     return function(records) {
-      if (!records.included) return records
+      if (!records || !records.included) return records
       var includedTypes = Object.keys(records.included)
       return Promise.all(includedTypes.map(type => {
         return transform(type, [req])(records.included[type])
@@ -90,7 +98,14 @@ function addRoutes(name, schemas, router, operations, baseURL) {
   var toJSONAPI = JSONAPI(schemas, baseURL)
   var d = debugWith(`Added route: ${baseURL}`)
   router.get(d(`/${name}`), (req, res, next) => {
-    operations.findAll(name, '*', { query: req.query, params: {} })
+    operation('findAll')('*', {
+        query: req.query,
+        params: {}
+      }, {
+        req: req,
+        res: res,
+        next: next
+      })
       .then(transform(name, [req]))
       .then(normalizeRecords)
       .then(transformIncluded(req))
@@ -102,7 +117,14 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       .catch(next)
   })
   router.get(d(`/${name}/:id`), (req, res, next) => {
-    operations.findOne(name, '*', { query: req.query, params: { id: parseInt(req.params.id, 10) } })
+    operation('findOne')('*', {
+        query: req.query,
+        params: { id: parseInt(req.params.id, 10) }
+      }, {
+        req: req,
+        res: res,
+        next: next
+      })
       .then(transform(name, [req]))
       .then(normalizeRecords)
       .then(transformIncluded(req))
@@ -115,10 +137,26 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       .catch(next)
   })
   router.post(d(`/${name}`), (req, res, next) => {
-    operations.create(name, req.body)
-      .returning('id')
-      .then(ids => {
-        return operations.findOne(name, '*', { query: req.query, params: { id: ids[0] } })
+    operation('create')(req.body, {
+        req: req,
+        res: res,
+        next: next
+      })
+      .then(created => {
+        if (!created) {
+          throw new Error('You must return a model or ID from the "created" operation')
+        } else if (typeof created !== 'object') {
+          return operation('findOne')('*', {
+            query: req.query,
+            params: { id: created }
+          }, {
+            req: req,
+            res: res,
+            next: next
+          })
+        } else {
+          return created
+        }
       })
       .then(transform(name, [req]))
       .then(normalizeRecords)
@@ -134,7 +172,11 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       .catch(next)
   })
   router.patch(d(`/${name}/:id`), (req, res, next) => {
-    operations.update(name, req.params.id, req.body)
+    operation('update')(req.params.id, req.body, {
+        req: req,
+        res: res,
+        next: next
+      })
       .then(transform(name, [req]))
       .then(normalizeRecords)
       .then(transformIncluded(req))
@@ -147,7 +189,11 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       .catch(next)
   })
   router.delete(d(`/${name}/:id`), (req, res, next) => {
-    operations.delete(name, req.params.id)
+    operation('delete')(req.params.id, {
+        req: req,
+        res: res,
+        next: next
+      })
       .then(records => {
         success(res, 204).send()
       })
@@ -160,28 +206,28 @@ function addRoutes(name, schemas, router, operations, baseURL) {
     var type = relationship.type
     function getOptions(req) {
       var id = parseInt(req.params.id, 10)
-      var opts = {
+      var filter = {
         params: {},
         query: req.query
       }
       if (relationship.relationship === 'belongsTo') {
         // TODO: verify that this works in both directions
         var idKey = relationship.foreignKey || `${k}_id`
-        opts.join = {
+        filter.join = {
           fields: `${type}.*`,
           table: `${name}`,
           left: `${name}.${idKey}`,
           right: `${type}.id`
         }
-        opts.params[`${name}.id`] = id
+        filter.params[`${name}.id`] = id
       } else if (relationship.relationship === 'hasMany') {
         var idKey = relationship.foreignKey || `${pluralize(name, 1)}_id`
-        opts.params[idKey] = id
+        filter.params[idKey] = id
       }
       if (relationship.through) {
-        opts.through = relationship.through
+        filter.through = relationship.through
       }
-      return opts
+      return filter
     }
     function normalizeData(data) {
       if (relationship.relationship === 'belongsTo') {
@@ -195,8 +241,12 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       return data
     }
     router.get(d(`/${name}/:id/${k}`), (req, res, next) => {
-      var operation = relationship.relationship === 'belongsTo' ? 'findOne' : 'findAll'
-      operations[operation](relationship.type, '*', getOptions(req))
+      var operationType = relationship.relationship === 'belongsTo' ? 'findOne' : 'findAll'
+      operation(operationType, relationship.type)('*', getOptions(req), {
+          req: req,
+          res: res,
+          next: next
+        })
         .then(transform(k, [req]))
         .then(normalizeRecords)
         .then(transformIncluded(req))
@@ -212,7 +262,11 @@ function addRoutes(name, schemas, router, operations, baseURL) {
         .catch(next)
     })
     router.get(d(`/${name}/:id/relationships/${k}`), (req, res, next) => {
-      operations.findAll(relationship.type, ['id'], getOptions(req))
+      operation('findAll', relationship.type)(['id'], getOptions(req), {
+          req: req,
+          res: res,
+          next: next
+        })
         .then(transform(k, [req]))
         .then(normalizeRecords)
         .then(records => {
@@ -233,7 +287,11 @@ function addRoutes(name, schemas, router, operations, baseURL) {
         id: req.params.id,
         type: relationship.type
       }
-      operations.updateRelationship(relationship.relationship, record, req.body.data)
+      operation('updateRelationship')(relationship.relationship, record, req.body.data, {
+          req: req,
+          res: res,
+          next: next
+        })
         .then(response => {
           if (response === null) {
             success(res, 204).send()
