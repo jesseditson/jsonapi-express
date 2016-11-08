@@ -37,6 +37,15 @@ function debugWith(prefix) {
   }
 }
 
+function mergeObjects(o1, o2) {
+  if (o1 && o2) {
+    for (var l in o2) {
+      if (o2.hasOwnProperty(l)) o1[l] = o2[l]
+    }
+  }
+  return o1
+}
+
 function normalizeRecords(records) {
   if (!records) return records
   if (!records.data) return { data: records }
@@ -73,7 +82,13 @@ function getOperations(ops, name) {
       }
       debugOp(op + ' ' + name + ' operation not found, skipping')
     }
-    return operation
+    return function() {
+      return new Promise(r => r(operation.apply(this, arguments))).catch(e => {
+        console.error('Error running ' + op + ' ' + name + ' operation:', e.message);
+        console.error(e.stack);
+        throw e;
+      });
+    }
   }
 }
 
@@ -111,10 +126,11 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       .then(transformIncluded(req))
       .then(records => {
         success(res).json(toJSONAPI(name)(records.data, {
-          included: records.included
+          included: records.included,
+          meta: records.meta,
+          links: records.links
         }))
       })
-      .catch(next)
   })
   router.get(d(`/${name}/:id`), (req, res, next) => {
     operation('findOne')('*', {
@@ -131,10 +147,11 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       .then(records => {
         records = records || {}
         success(res).json(toJSONAPI(name)(records.data, {
-          included: records.included
+          included: records.included,
+          meta: records.meta,
+          links: records.links
         }))
       })
-      .catch(next)
   })
   router.post(d(`/${name}`), (req, res, next) => {
     operation('create')(req.body, {
@@ -166,10 +183,11 @@ function addRoutes(name, schemas, router, operations, baseURL) {
         success(res, 201)
           .set('Location', `${baseURL}/${name}/${records.id}`)
           .json(toJSONAPI(name)(records.data, {
-            included: records.included
+            included: records.included,
+            meta: records.meta,
+            links: records.links
           }))
       })
-      .catch(next)
   })
   router.patch(d(`/${name}/:id`), (req, res, next) => {
     operation('update')(req.params.id, req.body, {
@@ -183,10 +201,11 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       .then(records => {
         records = records || {}
         success(res).json(toJSONAPI(name)(records.data, {
-          included: records.included
+          included: records.included,
+          meta: records.meta,
+          links: records.links
         }))
       })
-      .catch(next)
   })
   router.delete(d(`/${name}/:id`), (req, res, next) => {
     operation('delete')(req.params.id, {
@@ -197,7 +216,6 @@ function addRoutes(name, schemas, router, operations, baseURL) {
       .then(records => {
         success(res, 204).send()
       })
-      .catch(next)
   })
   var schema = schemas[name]
   var relationships = Object.keys(schema).filter(k => schema[k] && schema[k].relationship)
@@ -253,13 +271,13 @@ function addRoutes(name, schemas, router, operations, baseURL) {
         .then(records => {
           records = records || {}
           success(res).json(toJSONAPI(relationship.type)(normalizeData(records.data), {
-            links: {
+            links: mergeObjects({
               self: `/${name}/${req.params.id}/${k}`
-            },
-            included: records.included
+            }, records.links),
+            included: records.included,
+            meta: records.meta
           }))
         })
-        .catch(next)
     })
     router.get(d(`/${name}/:id/relationships/${k}`), (req, res, next) => {
       operation('findAll', relationship.type)(['id'], getOptions(req), {
@@ -272,13 +290,14 @@ function addRoutes(name, schemas, router, operations, baseURL) {
         .then(records => {
           records = records || {}
           success(res).json(toJSONAPI(relationship.type)(normalizeData(records.data), {
-            links: {
+            links: mergeObjects({
               self: `/${name}/${req.params.id}/relationships/${k}`,
               related: `/${name}/${req.params.id}/${k}`
-            }
+            }, records.links),
+            included: records.included,
+            meta: records.meta
           }, records.defaults ))
         })
-        .catch(next)
     })
     function updateRelationship(operation, req, res, next) {
       var record = {
@@ -299,7 +318,6 @@ function addRoutes(name, schemas, router, operations, baseURL) {
             success(res).json((normalizeData(response)))
           }
         })
-        .catch(next)
     }
     router.post(d(`/${name}/:id/relationships/${k}`), updateRelationship.bind(null, 'create'))
     router.patch(d(`/${name}/:id/relationships/${k}`), updateRelationship.bind(null, 'update'))
