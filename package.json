@@ -24,6 +24,7 @@
   "homepage": "https://github.com/jesseditson/jsonapi-express#readme",
   "dependencies": {
     "body-parser": "^1.15.1",
+    "debug": "^2.3.3",
     "express": "^4.13.4",
     "jsonapi-schema": "^0.1.4",
     "pluralize": "^3.0.0"
